@@ -28,6 +28,8 @@ func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
+	Category() CategoryResolver
+	Course() CourseResolver
 	Mutation() MutationResolver
 	Query() QueryResolver
 }
@@ -61,6 +63,12 @@ type ComplexityRoot struct {
 	}
 }
 
+type CategoryResolver interface {
+	Courses(ctx context.Context, obj *model.Category) ([]*model.Course, error)
+}
+type CourseResolver interface {
+	Category(ctx context.Context, obj *model.Course) (*model.Category, error)
+}
 type MutationResolver interface {
 	CreateCategory(ctx context.Context, input model.NewCategory) (*model.Category, error)
 	CreateCourse(ctx context.Context, input model.NewCourse) (*model.Course, error)
@@ -453,7 +461,7 @@ func (ec *executionContext) _Category_courses(ctx context.Context, field graphql
 		field,
 		ec.fieldContext_Category_courses,
 		func(ctx context.Context) (any, error) {
-			return obj.Courses, nil
+			return ec.Resolvers.Category().Courses(ctx, obj)
 		},
 		nil,
 		ec.marshalNCourse2ᚕᚖgithubᚗcomᚋrenamrgbᚋgoᚑexpertᚑgraphqlᚋgraphᚋmodelᚐCourseᚄ,
@@ -466,8 +474,8 @@ func (ec *executionContext) fieldContext_Category_courses(_ context.Context, fie
 	fc = &graphql.FieldContext{
 		Object:     "Category",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -579,7 +587,7 @@ func (ec *executionContext) _Course_category(ctx context.Context, field graphql.
 		field,
 		ec.fieldContext_Course_category,
 		func(ctx context.Context) (any, error) {
-			return obj.Category, nil
+			return ec.Resolvers.Course().Category(ctx, obj)
 		},
 		nil,
 		ec.marshalNCategory2ᚖgithubᚗcomᚋrenamrgbᚋgoᚑexpertᚑgraphqlᚋgraphᚋmodelᚐCategory,
@@ -592,8 +600,8 @@ func (ec *executionContext) fieldContext_Course_category(_ context.Context, fiel
 	fc = &graphql.FieldContext{
 		Object:     "Course",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -2448,23 +2456,54 @@ func (ec *executionContext) _Category(ctx context.Context, sel ast.SelectionSet,
 		case "id":
 			out.Values[i] = ec._Category_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "name":
 			out.Values[i] = ec._Category_name(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "description":
 			out.Values[i] = ec._Category_description(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "courses":
-			out.Values[i] = ec._Category_courses(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Category_courses(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -2502,20 +2541,51 @@ func (ec *executionContext) _Course(ctx context.Context, sel ast.SelectionSet, o
 		case "id":
 			out.Values[i] = ec._Course_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "name":
 			out.Values[i] = ec._Course_name(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "description":
 			out.Values[i] = ec._Course_description(ctx, field, obj)
 		case "category":
-			out.Values[i] = ec._Course_category(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Course_category(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
